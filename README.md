@@ -9,6 +9,9 @@ wiztree-metafile . > meta.json
 
 ```
 
+## convert metafile.json to image
+
+https://github.com/ahaoboy/metafile-image
 
 ## Treemap Chart
 
