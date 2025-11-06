@@ -19,8 +19,15 @@ rayon = "1"
 crossbeam-channel = "0.5"
 num_cpus = "1"
 
-# [target.'cfg(unix)'.dependencies]
-# libc = "0.2"
+[profile.release]
+debug = false
+lto = true
+strip = true
+opt-level = 3
+codegen-units = 1
 
-[dev-dependencies]
-tempfile = "3"
+[profile.bloaty]
+debug = true
+lto = false
+strip = false
+inherits = 'release'

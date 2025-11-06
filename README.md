@@ -1,4 +1,4 @@
-# File Analyzer
+# wiztree-metafile
 
 A high-performance Rust library and CLI tool for analyzing directory structures and file information. Designed to handle extremely large file systems (100,000+ files) efficiently with configurable traversal strategies, multi-threading support, and memory-efficient streaming.
 
