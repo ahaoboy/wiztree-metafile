@@ -52,3 +52,12 @@ jobs:
           RUSTFLAGS: ${{ matrix.RUSTFLAGS }}
           tag: nightly
           allowUpdates: true
+
+      - name: test
+        run: |
+          cargo run -q -- . -o meta-${{ matrix.target }}.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meta-${{ matrix.target }}
+          path: meta-${{ matrix.target }}.json
