@@ -38,18 +38,18 @@
 //! }
 //! ```
 
+pub mod analyzer;
+pub mod collector;
 pub mod config;
 pub mod error;
-pub mod analyzer;
+pub mod link_handler;
+pub mod output;
+pub mod processor;
 pub mod traversal;
 pub mod walker;
-pub mod link_handler;
-pub mod processor;
-pub mod collector;
-pub mod output;
 
 // Re-export main types for convenience
+pub use analyzer::{AnalysisResult, FileAnalyzer, FileEntry};
 pub use config::{AnalyzerConfig, TraversalStrategy};
 pub use error::AnalyzerError;
-pub use analyzer::{FileAnalyzer, AnalysisResult, FileEntry};
 pub use output::OutputFormat;

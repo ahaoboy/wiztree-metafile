@@ -14,6 +14,12 @@ use std::sync::Arc;
 
 pub struct BreadthFirstTraversal;
 
+impl Default for BreadthFirstTraversal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BreadthFirstTraversal {
     pub fn new() -> Self {
         Self
@@ -34,13 +40,17 @@ impl TraversalStrategy for BreadthFirstTraversal {
         queue.push_back((root.to_path_buf(), 1));
 
         while let Some((path, depth)) = queue.pop_front() {
+            // Check if path should be ignored
+            if config.should_ignore(&path) {
+                continue;
+            }
+
             // Check file count limit
-            if let Some(max_files) = config.max_files {
-                if collector.file_count() >= max_files {
+            if let Some(max_files) = config.max_files
+                && collector.file_count() >= max_files {
                     collector.set_incomplete(true);
                     break;
                 }
-            }
 
             // Check if this is a circular symlink
             let metadata = match fs::symlink_metadata(&path) {
@@ -51,34 +61,40 @@ impl TraversalStrategy for BreadthFirstTraversal {
                 }
             };
 
-            if metadata.is_symlink() {
-                if link_handler.is_circular(&path).unwrap_or(false) {
+            if metadata.is_symlink()
+                && link_handler.is_circular(&path).unwrap_or(false) {
                     collector.add_warning(format!("Circular symlink detected: {}", path.display()));
                     continue;
                 }
-            }
 
             // Mark directory as visited if it's a directory
             if metadata.is_dir() {
                 if let Err(e) = link_handler.mark_visited(&path) {
-                    collector.add_warning(format!("Failed to mark visited {}: {}", path.display(), e));
+                    collector.add_warning(format!(
+                        "Failed to mark visited {}: {}",
+                        path.display(),
+                        e
+                    ));
                 }
                 collector.increment_directory_count();
             }
 
             // Process file
-            if metadata.is_file() || metadata.is_symlink() {
-                if let Some(entry) = processor.process_file(&path, depth)? {
+            if (metadata.is_file() || metadata.is_symlink())
+                && let Some(entry) = processor.process_file(&path, depth)? {
                     collector.add_entry(entry);
                 }
-            }
 
             // Add subdirectories to queue if this is a directory
             if metadata.is_dir() {
                 let entries = match walker.read_dir(&path, depth, config.max_depth) {
                     Ok(e) => e,
                     Err(e) => {
-                        collector.add_warning(format!("Cannot read directory {}: {}", path.display(), e));
+                        collector.add_warning(format!(
+                            "Cannot read directory {}: {}",
+                            path.display(),
+                            e
+                        ));
                         continue;
                     }
                 };

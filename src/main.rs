@@ -1,14 +1,14 @@
 // CLI entry point
 
 use clap::Parser;
-use wiztree_metafile::{AnalyzerConfig, FileAnalyzer, TraversalStrategy};
 use std::path::PathBuf;
 use std::process;
+use wiztree_metafile::{AnalyzerConfig, FileAnalyzer, TraversalStrategy};
 
 #[derive(Parser)]
-#[command(name = "file-analyzer")]
+#[command(name = "wiztree-metafile")]
 #[command(version = "0.1.0")]
-#[command(about = "Analyze directory structures and file information", long_about = None)]
+#[command(about = "Analyze directory structures and file information with esbuild metafile format output", long_about = None)]
 struct Cli {
     /// Root directory to analyze
     #[arg(value_name = "PATH")]
@@ -41,6 +41,10 @@ struct Cli {
     /// Output format: text, json, metafile
     #[arg(short = 'f', long = "format", default_value = "metafile")]
     format: String,
+
+    /// Ignore patterns (glob format, can be specified multiple times)
+    #[arg(short = 'i', long = "ignore")]
+    ignore: Vec<String>,
 }
 
 fn main() {
@@ -62,6 +66,13 @@ fn main() {
     config.traversal_strategy = strategy;
     config.min_file_size = cli.min_size;
     config.output_path = cli.output.clone();
+
+    // Set ignore patterns
+    if !cli.ignore.is_empty()
+        && let Err(e) = config.set_ignore_patterns(cli.ignore) {
+            eprintln!("Error setting ignore patterns: {}", e);
+            process::exit(1);
+        }
 
     // Set thread count
     if let Some(threads) = cli.threads {

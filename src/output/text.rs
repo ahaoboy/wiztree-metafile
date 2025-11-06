@@ -12,9 +12,11 @@ impl OutputFormatter for TextFormatter {
 
         // Summary statistics
         output.push_str("=== File Analysis Results ===\n\n");
-        output.push_str(&format!("Total Size: {} bytes ({:.2} MB)\n",
+        output.push_str(&format!(
+            "Total Size: {} bytes ({:.2} MB)\n",
             result.total_size,
-            result.total_size as f64 / 1_048_576.0));
+            result.total_size as f64 / 1_048_576.0
+        ));
         output.push_str(&format!("File Count: {}\n", result.file_count));
         output.push_str(&format!("Directory Count: {}\n", result.directory_count));
         output.push_str(&format!("Symlink Count: {}\n", result.symlink_count));
@@ -36,7 +38,9 @@ impl OutputFormatter for TextFormatter {
             output.push_str(&format!("\n=== Files ({}) ===\n", result.entries.len()));
             for entry in &result.entries {
                 let symlink_marker = if entry.is_symlink { " -> " } else { "" };
-                let target = entry.target.as_ref()
+                let target = entry
+                    .target
+                    .as_ref()
                     .map(|t| t.display().to_string())
                     .unwrap_or_default();
 

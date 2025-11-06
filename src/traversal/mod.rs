@@ -8,11 +8,11 @@ use crate::walker::DirectoryWalker;
 use std::path::Path;
 use std::sync::Arc;
 
-pub mod depth_first;
 pub mod breadth_first;
+pub mod depth_first;
 
-pub use depth_first::DepthFirstTraversal;
 pub use breadth_first::BreadthFirstTraversal;
+pub use depth_first::DepthFirstTraversal;
 
 /// Trait for different directory traversal strategies
 pub trait TraversalStrategy: Send + Sync {

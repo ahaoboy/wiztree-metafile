@@ -22,18 +22,21 @@ impl FileProcessor {
     }
 
     /// Process a file and return a FileEntry if it should be included
-    pub fn process_file(&self, path: &Path, depth: usize) -> Result<Option<FileEntry>, AnalyzerError> {
+    pub fn process_file(
+        &self,
+        path: &Path,
+        depth: usize,
+    ) -> Result<Option<FileEntry>, AnalyzerError> {
         // Get metadata (follow symlinks for size)
         let symlink_metadata = fs::symlink_metadata(path)?;
         let is_symlink = symlink_metadata.is_symlink();
 
         // For symlinks, check if it's a duplicate
-        if is_symlink {
-            if self.link_handler.is_duplicate_inode(&symlink_metadata) {
+        if is_symlink
+            && self.link_handler.is_duplicate_inode(&symlink_metadata) {
                 // Skip duplicate symlinks
                 return Ok(None);
             }
-        }
 
         // Get the actual file metadata (following symlinks)
         let metadata = match fs::metadata(path) {

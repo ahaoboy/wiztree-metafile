@@ -7,12 +7,12 @@ use std::io::Write;
 use std::path::Path;
 
 pub mod json;
-pub mod text;
 pub mod metafile;
+pub mod text;
 
 pub use json::JsonFormatter;
-pub use text::TextFormatter;
 pub use metafile::MetafileFormatter;
+pub use text::TextFormatter;
 
 /// Trait for formatting analysis results
 pub trait OutputFormatter {

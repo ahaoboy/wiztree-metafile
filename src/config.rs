@@ -1,6 +1,7 @@
 // Configuration structures for file analysis
 
 use crate::error::AnalyzerError;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -12,19 +13,17 @@ pub struct AnalyzerConfig {
     pub thread_count: usize,
     pub output_path: Option<PathBuf>,
     pub root_path: PathBuf,
+    pub ignore_patterns: Option<GlobSet>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum TraversalStrategy {
+    #[default]
     DepthFirst,
     BreadthFirst,
 }
 
-impl Default for TraversalStrategy {
-    fn default() -> Self {
-        TraversalStrategy::DepthFirst
-    }
-}
 
 impl std::str::FromStr for TraversalStrategy {
     type Err = String;
@@ -48,6 +47,38 @@ impl AnalyzerConfig {
             thread_count: num_cpus::get(),
             output_path: None,
             root_path,
+            ignore_patterns: None,
+        }
+    }
+
+    /// Set ignore patterns from a list of glob patterns
+    pub fn set_ignore_patterns(&mut self, patterns: Vec<String>) -> Result<(), AnalyzerError> {
+        if patterns.is_empty() {
+            self.ignore_patterns = None;
+            return Ok(());
+        }
+
+        let mut builder = GlobSetBuilder::new();
+        for pattern in patterns {
+            let glob = Glob::new(&pattern).map_err(|e| {
+                AnalyzerError::InvalidConfig(format!("Invalid glob pattern '{}': {}", pattern, e))
+            })?;
+            builder.add(glob);
+        }
+
+        self.ignore_patterns = Some(builder.build().map_err(|e| {
+            AnalyzerError::InvalidConfig(format!("Failed to build glob set: {}", e))
+        })?);
+
+        Ok(())
+    }
+
+    /// Check if a path should be ignored
+    pub fn should_ignore(&self, path: &std::path::Path) -> bool {
+        if let Some(ref patterns) = self.ignore_patterns {
+            patterns.is_match(path)
+        } else {
+            false
         }
     }
 
@@ -70,13 +101,12 @@ impl AnalyzerConfig {
         }
 
         // Validate depth is positive if specified
-        if let Some(depth) = self.max_depth {
-            if depth == 0 {
+        if let Some(depth) = self.max_depth
+            && depth == 0 {
                 return Err(AnalyzerError::InvalidConfig(
                     "Maximum depth must be at least 1".to_string(),
                 ));
             }
-        }
 
         // Validate thread count is within valid range
         let cpu_count = num_cpus::get();

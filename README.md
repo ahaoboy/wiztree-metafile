@@ -2,6 +2,16 @@
 
 A high-performance Rust library and CLI tool for analyzing directory structures and file information. Designed to handle extremely large file systems (100,000+ files) efficiently with configurable traversal strategies, multi-threading support, and memory-efficient streaming.
 
+## Related Tools
+
+This tool is inspired by and compatible with:
+
+- **[WizTree](https://www.diskanalyzer.com/)** - The Fastest Disk Space Analyzer for Windows
+- **[bloaty-metafile](https://github.com/ahaoboy/bloaty-metafile)** - Convert bloaty output to esbuild metafile format
+- **[esbuild Bundle Size Analyzer](https://esbuild.github.io/analyze/)** - Visualize and analyze bundle sizes
+
+The output format is compatible with esbuild's metafile format, allowing you to visualize directory structures using esbuild's analyzer.
+
 ## Features
 
 - **Configurable Depth Limits**: Control how deep to traverse directory structures
@@ -23,7 +33,7 @@ cd wiztree-metafile
 cargo build --release
 ```
 
-The binary will be available at `target/release/file-analyzer`.
+The binary will be available at `target/release/wiztree-metafile`.
 
 ### As a Library
 
@@ -41,13 +51,13 @@ file_analyzer = { path = "path/to/wiztree-metafile" }
 Analyze the current directory:
 
 ```bash
-file-analyzer .
+wiztree-metafile .
 ```
 
 ### Command-Line Options
 
 ```
-Usage: file-analyzer [OPTIONS] <PATH>
+Usage: wiztree-metafile [OPTIONS] <PATH>
 
 Arguments:
   <PATH>  Root directory to analyze
@@ -58,7 +68,9 @@ Options:
   -s, --strategy <STRATEGY>      Traversal strategy: depth-first, breadth-first, dfs, bfs [default: depth-first]
   -m, --min-size <MIN_SIZE>      Minimum file size in bytes [default: 0]
   -t, --threads <THREADS>        Number of threads (1 to CPU count)
-  -o, --output <OUTPUT>          Output file path (JSON format)
+  -o, --output <OUTPUT>          Output file path
+  -f, --format <FORMAT>          Output format: text, json, metafile [default: metafile]
+  -i, --ignore <IGNORE>          Ignore patterns (glob format, can be specified multiple times)
   -h, --help                     Print help
   -V, --version                  Print version
 ```
@@ -67,37 +79,49 @@ Options:
 
 **Analyze with depth limit:**
 ```bash
-file-analyzer . -d 3
+wiztree-metafile . -d 3
 ```
 
 **Analyze only files >= 1KB:**
 ```bash
-file-analyzer . -m 1024
+wiztree-metafile . -m 1024
 ```
 
 **Use breadth-first traversal:**
 ```bash
-file-analyzer . -s breadth-first
+wiztree-metafile . -s breadth-first
 ```
 
 **Limit to 1000 files:**
 ```bash
-file-analyzer . -n 1000
+wiztree-metafile . -n 1000
 ```
 
 **Use 4 threads:**
 ```bash
-file-analyzer . -t 4
+wiztree-metafile . -t 4
 ```
 
 **Output to JSON file:**
 ```bash
-file-analyzer . -o results.json
+wiztree-metafile . -o results.json
+```
+
+**Ignore specific paths:**
+```bash
+# Ignore node_modules directories
+wiztree-metafile . -i "**/node_modules/**"
+
+# Ignore multiple patterns
+wiztree-metafile . -i "**/node_modules/**" -i "**/.git/**" -i "**/target/**"
+
+# Ignore system directories (Linux)
+wiztree-metafile / -i "/proc/**" -i "/sys/**" -i "/dev/**"
 ```
 
 **Combine multiple options:**
 ```bash
-file-analyzer ./node_modules -d 5 -m 1024 -n 10000 -t 8 -o analysis.json
+wiztree-metafile ./node_modules -d 5 -m 1024 -n 10000 -t 8 -o analysis.json
 ```
 
 ## Library Usage
@@ -168,24 +192,37 @@ let result = analyzer.analyze()?;
 - **Lazy Evaluation**: Only resolves symlinks when necessary
 - **Depth Checking**: Skips directories beyond depth limit before reading
 
+## Visualizing Results
+
+The metafile output can be visualized using esbuild's analyzer:
+
+1. Generate a metafile:
+```bash
+wiztree-metafile . -o metafile.json
+```
+
+2. Upload `metafile.json` to [esbuild's Bundle Size Analyzer](https://esbuild.github.io/analyze/)
+
+3. Explore your directory structure interactively with a sunburst chart
+
 ## Use Cases
 
 ### Analyzing node_modules
 
 ```bash
-file-analyzer ./node_modules -d 10 -m 1024 -o node_modules_analysis.json
+wiztree-metafile ./node_modules -d 10 -m 1024 -o node_modules_analysis.json
 ```
 
 ### Analyzing System Directories
 
 ```bash
-file-analyzer /usr -d 5 -n 50000 -t 8
+wiztree-metafile /usr -d 5 -n 50000 -t 8
 ```
 
 ### Finding Large Files
 
 ```bash
-file-analyzer . -m 10485760  # Files >= 10MB
+wiztree-metafile . -m 10485760  # Files >= 10MB
 ```
 
 ## Symbolic Link Handling

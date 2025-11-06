@@ -14,6 +14,12 @@ pub struct ResultCollector {
     incomplete: Arc<AtomicBool>,
 }
 
+impl Default for ResultCollector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResultCollector {
     pub fn new() -> Self {
         Self {

@@ -46,6 +46,12 @@ impl FileId {
     }
 }
 
+impl Default for LinkHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LinkHandler {
     pub fn new() -> Self {
         Self {
@@ -57,7 +63,11 @@ impl LinkHandler {
     /// Check if a directory path would create a circular reference
     pub fn is_circular(&self, path: &Path) -> Result<bool, AnalyzerError> {
         let canonical = path.canonicalize().map_err(|e| {
-            AnalyzerError::PathError(format!("Failed to canonicalize path {}: {}", path.display(), e))
+            AnalyzerError::PathError(format!(
+                "Failed to canonicalize path {}: {}",
+                path.display(),
+                e
+            ))
         })?;
 
         let visited = self.visited_paths.lock().unwrap();
@@ -67,7 +77,11 @@ impl LinkHandler {
     /// Mark a directory path as visited to detect circular references
     pub fn mark_visited(&self, path: &Path) -> Result<(), AnalyzerError> {
         let canonical = path.canonicalize().map_err(|e| {
-            AnalyzerError::PathError(format!("Failed to canonicalize path {}: {}", path.display(), e))
+            AnalyzerError::PathError(format!(
+                "Failed to canonicalize path {}: {}",
+                path.display(),
+                e
+            ))
         })?;
 
         let mut visited = self.visited_paths.lock().unwrap();
@@ -105,7 +119,11 @@ impl LinkHandler {
     /// Resolve a symbolic link to its target
     pub fn resolve_link(&self, path: &Path) -> Result<PathBuf, AnalyzerError> {
         std::fs::read_link(path).map_err(|e| {
-            AnalyzerError::PathError(format!("Failed to resolve symlink {}: {}", path.display(), e))
+            AnalyzerError::PathError(format!(
+                "Failed to resolve symlink {}: {}",
+                path.display(),
+                e
+            ))
         })
     }
 }
