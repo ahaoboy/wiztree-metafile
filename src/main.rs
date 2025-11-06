@@ -1,7 +1,7 @@
 // CLI entry point
 
 use clap::Parser;
-use file_analyzer::{AnalyzerConfig, FileAnalyzer, TraversalStrategy};
+use wiztree_metafile::{AnalyzerConfig, FileAnalyzer, TraversalStrategy};
 use std::path::PathBuf;
 use std::process;
 
@@ -71,11 +71,14 @@ fn main() {
 
     // Parse output format
     let output_format = match cli.format.to_lowercase().as_str() {
-        "text" => file_analyzer::output::OutputFormat::Text,
-        "json" => file_analyzer::output::OutputFormat::Json,
-        "metafile" | "meta" => file_analyzer::output::OutputFormat::Metafile,
+        "text" => wiztree_metafile::output::OutputFormat::Text,
+        "json" => wiztree_metafile::output::OutputFormat::Json,
+        "metafile" | "meta" => wiztree_metafile::output::OutputFormat::Metafile,
         _ => {
-            eprintln!("Error: Invalid format '{}'. Use: text, json, or metafile", cli.format);
+            eprintln!(
+                "Error: Invalid format '{}'. Use: text, json, or metafile",
+                cli.format
+            );
             process::exit(1);
         }
     };
@@ -85,7 +88,7 @@ fn main() {
     match analyzer.analyze() {
         Ok(result) => {
             // Write output
-            if let Err(e) = file_analyzer::output::OutputWriter::write(
+            if let Err(e) = wiztree_metafile::output::OutputWriter::write(
                 &result,
                 cli.output.as_deref(),
                 output_format,

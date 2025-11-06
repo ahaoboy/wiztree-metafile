@@ -4,7 +4,9 @@ use crate::collector::ResultCollector;
 use crate::config::{AnalyzerConfig, TraversalStrategy};
 use crate::error::AnalyzerError;
 use crate::link_handler::LinkHandler;
-use crate::traversal::{BreadthFirstTraversal, DepthFirstTraversal, TraversalStrategy as TraversalStrategyTrait};
+use crate::traversal::{
+    BreadthFirstTraversal, DepthFirstTraversal, TraversalStrategy as TraversalStrategyTrait,
+};
 use crate::walker::DirectoryWalker;
 use rayon::ThreadPoolBuilder;
 use serde::{Deserialize, Serialize};
@@ -44,43 +46,43 @@ impl FileAnalyzer {
         // Validate configuration
         self.config.validate()?;
 
-        #[cfg(feature = "progress")]
-        {
-            self.analyze_with_progress()
-        }
+        // #[cfg(feature = "progress")]
+        // {
+        //     self.analyze_with_progress()
+        // }
 
-        #[cfg(not(feature = "progress"))]
-        {
-            // Choose between single-threaded and multi-threaded
-            if self.config.thread_count == 1 {
-                self.analyze_single_threaded()
-            } else {
-                self.analyze_multi_threaded()
-            }
-        }
-    }
-
-    #[cfg(feature = "progress")]
-    fn analyze_with_progress(&self) -> Result<AnalysisResult, AnalyzerError> {
-        use indicatif::{ProgressBar, ProgressStyle};
-
-        let pb = ProgressBar::new_spinner();
-        pb.set_style(
-            ProgressStyle::default_spinner()
-                .template("{spinner:.green} [{elapsed_precise}] {msg}")
-                .unwrap(),
-        );
-        pb.set_message("Analyzing files...");
-
-        let result = if self.config.thread_count == 1 {
+        // #[cfg(not(feature = "progress"))]
+        // {
+        // Choose between single-threaded and multi-threaded
+        if self.config.thread_count == 1 {
             self.analyze_single_threaded()
         } else {
             self.analyze_multi_threaded()
-        };
-
-        pb.finish_with_message("Analysis complete");
-        result
+        }
+        // }
     }
+
+    // #[cfg(feature = "progress")]
+    // fn analyze_with_progress(&self) -> Result<AnalysisResult, AnalyzerError> {
+    //     use indicatif::{ProgressBar, ProgressStyle};
+
+    //     let pb = ProgressBar::new_spinner();
+    //     pb.set_style(
+    //         ProgressStyle::default_spinner()
+    //             .template("{spinner:.green} [{elapsed_precise}] {msg}")
+    //             .unwrap(),
+    //     );
+    //     pb.set_message("Analyzing files...");
+
+    //     let result = if self.config.thread_count == 1 {
+    //         self.analyze_single_threaded()
+    //     } else {
+    //         self.analyze_multi_threaded()
+    //     };
+
+    //     pb.finish_with_message("Analysis complete");
+    //     result
+    // }
 
     fn analyze_single_threaded(&self) -> Result<AnalysisResult, AnalyzerError> {
         let link_handler = Arc::new(LinkHandler::new());
