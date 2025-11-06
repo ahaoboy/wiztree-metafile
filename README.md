@@ -117,6 +117,15 @@ wiztree-metafile . -i "**/node_modules/**" -i "**/.git/**" -i "**/target/**"
 
 # Ignore system directories (Linux)
 wiztree-metafile / -i "/proc/**" -i "/sys/**" -i "/dev/**"
+
+# Ignore common build and version control directories
+wiztree-metafile . \
+  -i "**/.git/**" \
+  -i "**/target/**" \
+  -i "**/node_modules/**" \
+  -i "**/.idea/**" \
+  -i "**/.vscode/**" \
+  -o analysis.json
 ```
 
 **Combine multiple options:**
@@ -223,6 +232,92 @@ wiztree-metafile /usr -d 5 -n 50000 -t 8
 
 ```bash
 wiztree-metafile . -m 10485760  # Files >= 10MB
+```
+
+### Real-World Examples
+
+#### OpenWrt System File Analysis
+
+Analyze OpenWrt system files to understand disk usage:
+
+```bash
+# Analyze OpenWrt system files, ignoring virtual filesystems
+wiztree-metafile / -i "/proc" -o openwrt-analysis.json
+```
+
+This helps identify:
+- Which packages consume the most space
+- Large firmware files and kernel modules
+- Potential cleanup targets for embedded systems
+
+![openwrt](./assets/openwrt.png)
+
+#### MPV-Easy Project Build Analysis
+
+Analyze compiled binaries and build artifacts:
+
+```bash
+# Analyze mpv-easy build output
+wiztree-metafile ./mpv-easy -o mpv-easy.json
+
+```
+
+This helps:
+- Identify the largest compiled components
+- Optimize build output size
+- Find unnecessary dependencies
+- Analyze distribution package size
+
+![mpv-easy](./assets/mpv-easy.png)
+
+
+## Ignoring Paths
+
+The tool supports glob patterns for ignoring specific paths:
+
+### Glob Pattern Syntax
+
+- `*` - Matches any characters except `/`
+- `**` - Matches any characters including `/` (recursive)
+- `?` - Matches a single character
+- `[abc]` - Matches any character in the set
+- `{a,b}` - Matches either pattern
+
+### Common Patterns
+
+**Ignore specific directory names anywhere:**
+```bash
+wiztree-metafile . -i "**/.git/**" -i "**/target/**"
+```
+
+**Ignore directories in current path only:**
+```bash
+wiztree-metafile . -i ".git" -i "target"
+```
+
+**Ignore by file extension:**
+```bash
+wiztree-metafile . -i "**/*.tmp" -i "**/*.log"
+```
+
+**Ignore multiple patterns for Rust projects:**
+```bash
+wiztree-metafile . \
+  -i "**/.git/**" \
+  -i "**/target/**" \
+  -i "**/*.rlib" \
+  -i "**/Cargo.lock" \
+  -o rust-project.json
+```
+
+**Ignore multiple patterns for Node.js projects:**
+```bash
+wiztree-metafile . \
+  -i "**/.git/**" \
+  -i "**/node_modules/**" \
+  -i "**/dist/**" \
+  -i "**/.next/**" \
+  -o nodejs-project.json
 ```
 
 ## Symbolic Link Handling
