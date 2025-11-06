@@ -52,3 +52,4 @@ pub mod output;
 pub use config::{AnalyzerConfig, TraversalStrategy};
 pub use error::AnalyzerError;
 pub use analyzer::{FileAnalyzer, AnalysisResult, FileEntry};
+pub use output::OutputFormat;
