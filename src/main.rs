@@ -38,10 +38,6 @@ struct Cli {
     #[arg(short = 'o', long = "output")]
     output: Option<PathBuf>,
 
-    /// Output format: text, json, metafile
-    #[arg(short = 'f', long = "format", default_value = "metafile")]
-    format: String,
-
     /// Ignore patterns (glob format, can be specified multiple times)
     #[arg(short = 'i', long = "ignore")]
     ignore: Vec<String>,
@@ -69,10 +65,11 @@ fn main() {
 
     // Set ignore patterns
     if !cli.ignore.is_empty()
-        && let Err(e) = config.set_ignore_patterns(cli.ignore) {
-            eprintln!("Error setting ignore patterns: {}", e);
-            process::exit(1);
-        }
+        && let Err(e) = config.set_ignore_patterns(cli.ignore)
+    {
+        eprintln!("Error setting ignore patterns: {}", e);
+        process::exit(1);
+    }
 
     // Set thread count
     if let Some(threads) = cli.threads {
@@ -80,30 +77,14 @@ fn main() {
         config.clamp_thread_count();
     }
 
-    // Parse output format
-    let output_format = match cli.format.to_lowercase().as_str() {
-        "text" => wiztree_metafile::output::OutputFormat::Text,
-        "json" => wiztree_metafile::output::OutputFormat::Json,
-        "metafile" | "meta" => wiztree_metafile::output::OutputFormat::Metafile,
-        _ => {
-            eprintln!(
-                "Error: Invalid format '{}'. Use: text, json, or metafile",
-                cli.format
-            );
-            process::exit(1);
-        }
-    };
-
     // Run analysis
     let analyzer = FileAnalyzer::new(config);
     match analyzer.analyze() {
         Ok(result) => {
             // Write output
-            if let Err(e) = wiztree_metafile::output::OutputWriter::write(
-                &result,
-                cli.output.as_deref(),
-                output_format,
-            ) {
+            if let Err(e) =
+                wiztree_metafile::output::OutputWriter::write(&result, cli.output.as_deref())
+            {
                 eprintln!("Error writing output: {}", e);
                 process::exit(1);
             }

@@ -8,3 +8,9 @@ bloaty-csv:
 bloaty-json:
   bloaty-metafile meta.csv > meta.json
 bloaty: bloaty-build bloaty-csv bloaty-json
+
+clippy:
+  cargo clippy --fix --allow-dirty --allow-staged --all-targets
+fmt:
+  cargo fmt
+check: fmt clippy

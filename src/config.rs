@@ -16,14 +16,12 @@ pub struct AnalyzerConfig {
     pub ignore_patterns: Option<GlobSet>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TraversalStrategy {
     #[default]
     DepthFirst,
     BreadthFirst,
 }
-
 
 impl std::str::FromStr for TraversalStrategy {
     type Err = String;
@@ -102,11 +100,12 @@ impl AnalyzerConfig {
 
         // Validate depth is positive if specified
         if let Some(depth) = self.max_depth
-            && depth == 0 {
-                return Err(AnalyzerError::InvalidConfig(
-                    "Maximum depth must be at least 1".to_string(),
-                ));
-            }
+            && depth == 0
+        {
+            return Err(AnalyzerError::InvalidConfig(
+                "Maximum depth must be at least 1".to_string(),
+            ));
+        }
 
         // Validate thread count is within valid range
         let cpu_count = num_cpus::get();

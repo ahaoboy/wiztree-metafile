@@ -152,7 +152,31 @@ impl OutputFormatter for MetafileFormatter {
         let outputs = HashMap::from([("wiztree".to_string(), output)]);
         let metafile = Metafile { inputs, outputs };
 
-        let json = serde_json::to_string_pretty(&metafile)?;
+        // Use compact JSON format to reduce file size
+        let json = serde_json::to_string(&metafile)?;
+
+        // Check if JSON string is too large (JavaScript string length limit)
+        // JavaScript max string length is 2^30 - 1 (0x3fffffff) characters
+        // But V8 uses 0x1fffffe8 as practical limit
+        const MAX_JSON_LENGTH: usize = 0x1fff_ffe8; // ~536MB
+
+        let json_len = json.len();
+
+        if json_len > MAX_JSON_LENGTH {
+            eprintln!(
+                "Warning: JSON output is too large ({} bytes, {} MB)",
+                json_len,
+                json_len >> 20
+            );
+            eprintln!("This exceeds JavaScript's maximum string length (0x1fffffe8 characters)");
+            eprintln!("The output may not be usable in web-based tools like esbuild analyzer");
+            eprintln!("Consider using filters to reduce output size:");
+            eprintln!("  - Use --max-depth to limit directory depth");
+            eprintln!("  - Use --max-files to limit file count");
+            eprintln!("  - Use --min-size to filter small files");
+            eprintln!("  - Use --ignore to exclude directories");
+        }
+
         Ok(json)
     }
 }

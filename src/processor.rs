@@ -32,11 +32,10 @@ impl FileProcessor {
         let is_symlink = symlink_metadata.is_symlink();
 
         // For symlinks, check if it's a duplicate
-        if is_symlink
-            && self.link_handler.is_duplicate_inode(&symlink_metadata) {
-                // Skip duplicate symlinks
-                return Ok(None);
-            }
+        if is_symlink && self.link_handler.is_duplicate_inode(&symlink_metadata) {
+            // Skip duplicate symlinks
+            return Ok(None);
+        }
 
         // Get the actual file metadata (following symlinks)
         let metadata = match fs::metadata(path) {

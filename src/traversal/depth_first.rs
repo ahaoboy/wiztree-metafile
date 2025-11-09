@@ -45,10 +45,11 @@ impl DepthFirstTraversal {
 
         // Check file count limit
         if let Some(max_files) = ctx.config.max_files
-            && ctx.collector.file_count() >= max_files {
-                ctx.collector.set_incomplete(true);
-                return Ok(());
-            }
+            && ctx.collector.file_count() >= max_files
+        {
+            ctx.collector.set_incomplete(true);
+            return Ok(());
+        }
 
         // Check if this is a circular symlink
         let metadata = match fs::symlink_metadata(path) {
@@ -60,27 +61,30 @@ impl DepthFirstTraversal {
             }
         };
 
-        if metadata.is_symlink()
-            && ctx.link_handler.is_circular(path).unwrap_or(false) {
-                ctx.collector
-                    .add_warning(format!("Circular symlink detected: {}", path.display()));
-                return Ok(());
-            }
+        if metadata.is_symlink() && ctx.link_handler.is_circular(path).unwrap_or(false) {
+            ctx.collector
+                .add_warning(format!("Circular symlink detected: {}", path.display()));
+            return Ok(());
+        }
 
         // Mark directory as visited if it's a directory
         if metadata.is_dir() {
             if let Err(e) = ctx.link_handler.mark_visited(path) {
-                ctx.collector
-                    .add_warning(format!("Failed to mark visited {}: {}", path.display(), e));
+                ctx.collector.add_warning(format!(
+                    "Failed to mark visited {}: {}",
+                    path.display(),
+                    e
+                ));
             }
             ctx.collector.increment_directory_count();
         }
 
         // Process file
         if (metadata.is_file() || metadata.is_symlink())
-            && let Some(entry) = ctx.processor.process_file(path, depth)? {
-                ctx.collector.add_entry(entry);
-            }
+            && let Some(entry) = ctx.processor.process_file(path, depth)?
+        {
+            ctx.collector.add_entry(entry);
+        }
 
         // Traverse subdirectories if this is a directory
         if metadata.is_dir() {
@@ -99,10 +103,11 @@ impl DepthFirstTraversal {
             for entry in entries {
                 // Check file count limit before processing each entry
                 if let Some(max_files) = ctx.config.max_files
-                    && ctx.collector.file_count() >= max_files {
-                        ctx.collector.set_incomplete(true);
-                        return Ok(());
-                    }
+                    && ctx.collector.file_count() >= max_files
+                {
+                    ctx.collector.set_incomplete(true);
+                    return Ok(());
+                }
 
                 self.traverse_recursive(&entry.path, entry.depth, ctx)?;
             }

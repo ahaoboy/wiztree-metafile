@@ -47,10 +47,11 @@ impl TraversalStrategy for BreadthFirstTraversal {
 
             // Check file count limit
             if let Some(max_files) = config.max_files
-                && collector.file_count() >= max_files {
-                    collector.set_incomplete(true);
-                    break;
-                }
+                && collector.file_count() >= max_files
+            {
+                collector.set_incomplete(true);
+                break;
+            }
 
             // Check if this is a circular symlink
             let metadata = match fs::symlink_metadata(&path) {
@@ -61,11 +62,10 @@ impl TraversalStrategy for BreadthFirstTraversal {
                 }
             };
 
-            if metadata.is_symlink()
-                && link_handler.is_circular(&path).unwrap_or(false) {
-                    collector.add_warning(format!("Circular symlink detected: {}", path.display()));
-                    continue;
-                }
+            if metadata.is_symlink() && link_handler.is_circular(&path).unwrap_or(false) {
+                collector.add_warning(format!("Circular symlink detected: {}", path.display()));
+                continue;
+            }
 
             // Mark directory as visited if it's a directory
             if metadata.is_dir() {
@@ -81,9 +81,10 @@ impl TraversalStrategy for BreadthFirstTraversal {
 
             // Process file
             if (metadata.is_file() || metadata.is_symlink())
-                && let Some(entry) = processor.process_file(&path, depth)? {
-                    collector.add_entry(entry);
-                }
+                && let Some(entry) = processor.process_file(&path, depth)?
+            {
+                collector.add_entry(entry);
+            }
 
             // Add subdirectories to queue if this is a directory
             if metadata.is_dir() {
