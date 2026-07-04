@@ -1,111 +1,46 @@
-// Breadth-first traversal strategy
+// Breadth-first traversal strategy (iterative).
+//
+// Uses a single `VecDeque` of pending directory entries; entries are popped
+// from the front and a directory's children are pushed onto the back. This is
+// the classic BFS formulation. A `VecDeque<Pair>` is used in preference to
+// the original `(PathBuf, usize)` queue because the entry's `FileType` is
+// already known from the listing — we don't need a second stat here.
 
-use crate::collector::ResultCollector;
+use crate::analyzer::LocalResult;
 use crate::config::AnalyzerConfig;
 use crate::error::AnalyzerError;
 use crate::link_handler::LinkHandler;
-use crate::processor::FileProcessor;
-use crate::traversal::TraversalStrategy;
-use crate::walker::DirectoryWalker;
+use crate::traversal::helpers::{self, TraverseCtx};
+use crate::walker::DirEntry;
 use std::collections::VecDeque;
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub struct BreadthFirstTraversal;
+pub fn traverse(
+    config: &AnalyzerConfig,
+    link_handler: &Arc<LinkHandler>,
+) -> Result<LocalResult, AnalyzerError> {
+    let ctx = TraverseCtx::new(config, link_handler);
+    let mut result = LocalResult::default();
+    helpers::bootstrap_root(&ctx, &config.root_path, &mut result)?;
 
-impl Default for BreadthFirstTraversal {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+    let root_entries = helpers::read_dir_or_warn(&ctx, &config.root_path, 1, &mut result);
 
-impl BreadthFirstTraversal {
-    pub fn new() -> Self {
-        Self
-    }
-}
+    let mut queue: VecDeque<DirEntry> = VecDeque::with_capacity(64);
+    queue.extend(root_entries);
 
-impl TraversalStrategy for BreadthFirstTraversal {
-    fn traverse(
-        &self,
-        root: &Path,
-        config: &AnalyzerConfig,
-        walker: &DirectoryWalker,
-        link_handler: &Arc<LinkHandler>,
-        collector: &ResultCollector,
-    ) -> Result<(), AnalyzerError> {
-        let processor = FileProcessor::new(Arc::new(config.clone()), link_handler.clone());
-        let mut queue: VecDeque<(PathBuf, usize)> = VecDeque::new();
-        queue.push_back((root.to_path_buf(), 1));
-
-        while let Some((path, depth)) = queue.pop_front() {
-            // Check if path should be ignored
-            if config.should_ignore(&path) {
-                continue;
-            }
-
-            // Check file count limit
-            if let Some(max_files) = config.max_files
-                && collector.file_count() >= max_files
-            {
-                collector.set_incomplete(true);
-                break;
-            }
-
-            // Check if this is a circular symlink
-            let metadata = match fs::symlink_metadata(&path) {
-                Ok(m) => m,
-                Err(e) => {
-                    collector.add_warning(format!("Cannot access {}: {}", path.display(), e));
-                    continue;
-                }
-            };
-
-            if metadata.is_symlink() && link_handler.is_circular(&path).unwrap_or(false) {
-                collector.add_warning(format!("Circular symlink detected: {}", path.display()));
-                continue;
-            }
-
-            // Mark directory as visited if it's a directory
-            if metadata.is_dir() {
-                if let Err(e) = link_handler.mark_visited(&path) {
-                    collector.add_warning(format!(
-                        "Failed to mark visited {}: {}",
-                        path.display(),
-                        e
-                    ));
-                }
-                collector.increment_directory_count();
-            }
-
-            // Process file
-            if (metadata.is_file() || metadata.is_symlink())
-                && let Some(entry) = processor.process_file(&path, depth)?
-            {
-                collector.add_entry(entry);
-            }
-
-            // Add subdirectories to queue if this is a directory
-            if metadata.is_dir() {
-                let entries = match walker.read_dir(&path, depth, config.max_depth) {
-                    Ok(e) => e,
-                    Err(e) => {
-                        collector.add_warning(format!(
-                            "Cannot read directory {}: {}",
-                            path.display(),
-                            e
-                        ));
-                        continue;
-                    }
-                };
-
-                for entry in entries {
-                    queue.push_back((entry.path, entry.depth));
-                }
-            }
+    while let Some(entry) = queue.pop_front() {
+        if ctx.reached_max_files(&mut result) {
+            break;
         }
 
-        Ok(())
+        let descend =
+            helpers::process_entry(&ctx, &entry.path, entry.file_type, entry.depth, &mut result)?;
+
+        if let Some((dir, depth)) = descend {
+            let children = helpers::read_dir_or_warn(&ctx, &dir, depth, &mut result);
+            queue.extend(children);
+        }
     }
+
+    Ok(result)
 }

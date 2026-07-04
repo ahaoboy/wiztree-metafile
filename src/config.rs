@@ -27,10 +27,15 @@ impl std::str::FromStr for TraversalStrategy {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "depth-first" | "dfs" | "depth" => Ok(TraversalStrategy::DepthFirst),
-            "breadth-first" | "bfs" | "breadth" => Ok(TraversalStrategy::BreadthFirst),
-            _ => Err(format!("Invalid traversal strategy: {}", s)),
+        // Comparison is ASCII-case-insensitive so we can avoid allocating via
+        // `to_lowercase()`.
+        let matches = |cands: &[&str]| cands.iter().any(|c| s.eq_ignore_ascii_case(c));
+        if matches(&["depth-first", "dfs", "depth"]) {
+            Ok(TraversalStrategy::DepthFirst)
+        } else if matches(&["breadth-first", "bfs", "breadth"]) {
+            Ok(TraversalStrategy::BreadthFirst)
+        } else {
+            Err(format!("Invalid traversal strategy: {}", s))
         }
     }
 }
@@ -71,17 +76,22 @@ impl AnalyzerConfig {
         Ok(())
     }
 
-    /// Check if a path should be ignored
+    /// Check if a path should be ignored.
+    ///
+    /// The patterns documented in the README use forward slashes
+    /// (e.g. `**/node_modules/**`). On Windows, `Path::display()` typically
+    /// renders backslashes which would never match a forward-slash glob, so
+    /// we normalize the path string first.
     pub fn should_ignore(&self, path: &std::path::Path) -> bool {
-        if let Some(ref patterns) = self.ignore_patterns {
-            patterns.is_match(path)
-        } else {
-            false
-        }
+        let Some(ref patterns) = self.ignore_patterns else {
+            return false;
+        };
+        let normalized = path.display().to_string().replace('\\', "/");
+        patterns.is_match(&normalized)
     }
 
     /// Validate the configuration and return errors if invalid
-    pub fn validate(&self) -> Result<(), AnalyzerError> {
+    pub fn validate(&mut self) -> Result<(), AnalyzerError> {
         // Validate root path exists
         if !self.root_path.exists() {
             return Err(AnalyzerError::InvalidConfig(format!(
@@ -107,19 +117,12 @@ impl AnalyzerConfig {
             ));
         }
 
-        // Validate thread count is within valid range
-        let cpu_count = num_cpus::get();
-        if self.thread_count == 0 {
-            return Err(AnalyzerError::InvalidConfig(
-                "Thread count must be at least 1".to_string(),
-            ));
-        }
-        if self.thread_count > cpu_count {
-            return Err(AnalyzerError::InvalidConfig(format!(
-                "Thread count {} exceeds CPU count {}",
-                self.thread_count, cpu_count
-            )));
-        }
+        // Validate thread count is within valid range. We silently clamp instead
+        // of erroring-out: README guarantees "if you specify an invalid value,
+        // it will be adjusted automatically". This matches that contract even
+        // when callers invoke `validate()` without going through
+        // `clamp_thread_count()` first.
+        self.clamp_thread_count();
 
         Ok(())
     }

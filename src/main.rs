@@ -78,7 +78,7 @@ fn main() {
     }
 
     // Run analysis
-    let analyzer = FileAnalyzer::new(config);
+    let mut analyzer = FileAnalyzer::new(config);
     match analyzer.analyze() {
         Ok(result) => {
             // Write output

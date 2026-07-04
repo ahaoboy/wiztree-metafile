@@ -1,139 +1,65 @@
-// Depth-first traversal strategy
+// Depth-first traversal strategy (iterative).
+//
+// The previous implementation used unbounded recursion, which could blow the
+// default 8MB Rust thread stack on deep directory trees (think heavily
+// nested `node_modules`). This version uses an explicit `Vec<Vec<DirEntry>>`
+// stack where each layer is one `read_dir` batch; the inner stack frame
+// therefore yields increasing depth without growing the OS stack at all.
 
-use crate::collector::ResultCollector;
+use crate::analyzer::LocalResult;
 use crate::config::AnalyzerConfig;
 use crate::error::AnalyzerError;
 use crate::link_handler::LinkHandler;
-use crate::processor::FileProcessor;
-use crate::traversal::TraversalStrategy;
-use crate::walker::DirectoryWalker;
-use std::fs;
-use std::path::Path;
+use crate::traversal::helpers::{self, TraverseCtx};
+use crate::walker::DirEntry;
 use std::sync::Arc;
 
-pub struct DepthFirstTraversal;
+pub fn traverse(
+    config: &AnalyzerConfig,
+    link_handler: &Arc<LinkHandler>,
+) -> Result<LocalResult, AnalyzerError> {
+    let ctx = TraverseCtx::new(config, link_handler);
+    let mut result = LocalResult::default();
+    helpers::bootstrap_root(&ctx, &config.root_path, &mut result)?;
 
-struct TraversalContext<'a> {
-    config: &'a AnalyzerConfig,
-    walker: &'a DirectoryWalker,
-    link_handler: &'a Arc<LinkHandler>,
-    processor: &'a FileProcessor,
-    collector: &'a ResultCollector,
-}
+    // Read the root's children first so they all flow through the same
+    // `process_entry` pipeline. Avoids a special case for the root below.
+    let root_entries = helpers::read_dir_or_warn(&ctx, &config.root_path, 1, &mut result);
 
-impl Default for DepthFirstTraversal {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+    // Explicit stack (Vec<Vec<DirEntry>>): each stack frame is one
+    // `read_dir` batch. The inner `Vec::pop` is LIFO which gives us DFS
+    // ordering. Using `Vec` (not `VecDeque`) keeps iteration + pop cheap
+    // and avoids the worst case of 1k-deep recursion that could overflow
+    // the OS stack on heavily nested trees.
+    let mut stack: Vec<Vec<DirEntry>> = Vec::with_capacity(16);
+    stack.push(root_entries);
 
-impl DepthFirstTraversal {
-    pub fn new() -> Self {
-        Self
-    }
-
-    fn traverse_recursive(
-        &self,
-        path: &Path,
-        depth: usize,
-        ctx: &TraversalContext,
-    ) -> Result<(), AnalyzerError> {
-        // Check if path should be ignored
-        if ctx.config.should_ignore(path) {
-            return Ok(());
-        }
-
-        // Check file count limit
-        if let Some(max_files) = ctx.config.max_files
-            && ctx.collector.file_count() >= max_files
-        {
-            ctx.collector.set_incomplete(true);
-            return Ok(());
-        }
-
-        // Check if this is a circular symlink
-        let metadata = match fs::symlink_metadata(path) {
-            Ok(m) => m,
-            Err(e) => {
-                ctx.collector
-                    .add_warning(format!("Cannot access {}: {}", path.display(), e));
-                return Ok(());
-            }
+    while !stack.is_empty() {
+        // Take the next sibling of the current directory without disturbing
+        // the rest of the stack. `Vec::pop` on the top batch is O(1).
+        let next = {
+            let top = stack.last_mut().expect("checked non-empty above");
+            top.pop()
+        };
+        let Some(entry) = next else {
+            stack.pop();
+            continue;
         };
 
-        if metadata.is_symlink() && ctx.link_handler.is_circular(path).unwrap_or(false) {
-            ctx.collector
-                .add_warning(format!("Circular symlink detected: {}", path.display()));
-            return Ok(());
+        if ctx.reached_max_files(&mut result) {
+            break;
         }
 
-        // Mark directory as visited if it's a directory
-        if metadata.is_dir() {
-            if let Err(e) = ctx.link_handler.mark_visited(path) {
-                ctx.collector.add_warning(format!(
-                    "Failed to mark visited {}: {}",
-                    path.display(),
-                    e
-                ));
-            }
-            ctx.collector.increment_directory_count();
-        }
+        let descend =
+            helpers::process_entry(&ctx, &entry.path, entry.file_type, entry.depth, &mut result)?;
 
-        // Process file
-        if (metadata.is_file() || metadata.is_symlink())
-            && let Some(entry) = ctx.processor.process_file(path, depth)?
-        {
-            ctx.collector.add_entry(entry);
-        }
-
-        // Traverse subdirectories if this is a directory
-        if metadata.is_dir() {
-            let entries = match ctx.walker.read_dir(path, depth, ctx.config.max_depth) {
-                Ok(e) => e,
-                Err(e) => {
-                    ctx.collector.add_warning(format!(
-                        "Cannot read directory {}: {}",
-                        path.display(),
-                        e
-                    ));
-                    return Ok(());
-                }
-            };
-
-            for entry in entries {
-                // Check file count limit before processing each entry
-                if let Some(max_files) = ctx.config.max_files
-                    && ctx.collector.file_count() >= max_files
-                {
-                    ctx.collector.set_incomplete(true);
-                    return Ok(());
-                }
-
-                self.traverse_recursive(&entry.path, entry.depth, ctx)?;
+        if let Some((dir, depth)) = descend {
+            let children = helpers::read_dir_or_warn(&ctx, &dir, depth, &mut result);
+            if !children.is_empty() {
+                stack.push(children);
             }
         }
-
-        Ok(())
     }
-}
 
-impl TraversalStrategy for DepthFirstTraversal {
-    fn traverse(
-        &self,
-        root: &Path,
-        config: &AnalyzerConfig,
-        walker: &DirectoryWalker,
-        link_handler: &Arc<LinkHandler>,
-        collector: &ResultCollector,
-    ) -> Result<(), AnalyzerError> {
-        let processor = FileProcessor::new(Arc::new(config.clone()), link_handler.clone());
-        let ctx = TraversalContext {
-            config,
-            walker,
-            link_handler,
-            processor: &processor,
-            collector,
-        };
-        self.traverse_recursive(root, 1, &ctx)
-    }
+    Ok(result)
 }

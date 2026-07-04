@@ -1,14 +1,19 @@
-// Core file analyzer orchestration
+// Core file analyzer orchestration.
+//
+// Holds the public types (`FileEntry`, `AnalysisResult`) and a thin
+// `FileAnalyzer` driver that dispatches to either the single-threaded or
+// parallel traversal implementation in `crate::traversal`.
+//
+// `LocalResult` is the per-traversal accumulator used by the traversals. Each
+// traversal thread/process builds its own `LocalResult` (a plain `Vec` of
+// entries, no locking, no atomics); the parallel driver merges them at the
+// end. This replaces the old `ResultCollector`, which used a `Mutex<Vec>` on
+// the hot path and serialised every file insertion across threads.
 
-use crate::collector::ResultCollector;
-use crate::config::{AnalyzerConfig, TraversalStrategy};
+use crate::config::AnalyzerConfig;
 use crate::error::AnalyzerError;
 use crate::link_handler::LinkHandler;
-use crate::traversal::{
-    BreadthFirstTraversal, DepthFirstTraversal, TraversalStrategy as TraversalStrategyTrait,
-};
-use crate::walker::DirectoryWalker;
-use rayon::ThreadPoolBuilder;
+use crate::traversal;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -22,7 +27,7 @@ pub struct FileEntry {
     pub target: Option<PathBuf>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct AnalysisResult {
     pub total_size: u64,
     pub file_count: usize,
@@ -31,6 +36,70 @@ pub struct AnalysisResult {
     pub entries: Vec<FileEntry>,
     pub warnings: Vec<String>,
     pub incomplete: bool,
+}
+
+/// Per-traversal accumulator. Designed to be obtained cheaply per logical
+/// "task" (one directory subtree in DFS, one layer slice in BFS, one
+/// worker in the parallel traversal) and merged at the end without locking.
+#[derive(Debug, Default, Clone)]
+pub struct LocalResult {
+    pub entries: Vec<FileEntry>,
+    pub warnings: Vec<String>,
+    pub total_size: u64,
+    pub file_count: usize,
+    pub directory_count: usize,
+    pub symlink_count: usize,
+    pub incomplete: bool,
+}
+
+impl LocalResult {
+    pub fn add_entry(&mut self, entry: FileEntry) {
+        self.total_size += entry.size;
+        self.file_count += 1;
+        if entry.is_symlink {
+            self.symlink_count += 1;
+        }
+        self.entries.push(entry);
+    }
+
+    pub fn add_warning<S: Into<String>>(&mut self, warning: S) {
+        self.warnings.push(warning.into());
+    }
+
+    #[inline]
+    pub fn inc_dir(&mut self) {
+        self.directory_count += 1;
+    }
+
+    /// Merge another `LocalResult` into this one. Consumes `other`.
+    pub fn merge(&mut self, other: LocalResult) {
+        self.total_size += other.total_size;
+        self.file_count += other.file_count;
+        self.directory_count += other.directory_count;
+        self.symlink_count += other.symlink_count;
+        self.incomplete |= other.incomplete;
+        self.entries.extend(other.entries);
+        self.warnings.extend(other.warnings);
+    }
+
+    #[inline]
+    pub fn file_count(&self) -> usize {
+        self.file_count
+    }
+}
+
+impl From<LocalResult> for AnalysisResult {
+    fn from(l: LocalResult) -> Self {
+        AnalysisResult {
+            total_size: l.total_size,
+            file_count: l.file_count,
+            directory_count: l.directory_count,
+            symlink_count: l.symlink_count,
+            entries: l.entries,
+            warnings: l.warnings,
+            incomplete: l.incomplete,
+        }
+    }
 }
 
 pub struct FileAnalyzer {
@@ -42,82 +111,19 @@ impl FileAnalyzer {
         Self { config }
     }
 
-    pub fn analyze(&self) -> Result<AnalysisResult, AnalyzerError> {
-        // Validate configuration
+    pub fn analyze(&mut self) -> Result<AnalysisResult, AnalyzerError> {
         self.config.validate()?;
 
-        // #[cfg(feature = "progress")]
-        // {
-        //     self.analyze_with_progress()
-        // }
-
-        // #[cfg(not(feature = "progress"))]
-        // {
-        // Choose between single-threaded and multi-threaded
-        if self.config.thread_count == 1 {
-            self.analyze_single_threaded()
-        } else {
-            self.analyze_multi_threaded()
-        }
-        // }
-    }
-
-    // #[cfg(feature = "progress")]
-    // fn analyze_with_progress(&self) -> Result<AnalysisResult, AnalyzerError> {
-    //     use indicatif::{ProgressBar, ProgressStyle};
-
-    //     let pb = ProgressBar::new_spinner();
-    //     pb.set_style(
-    //         ProgressStyle::default_spinner()
-    //             .template("{spinner:.green} [{elapsed_precise}] {msg}")
-    //             .unwrap(),
-    //     );
-    //     pb.set_message("Analyzing files...");
-
-    //     let result = if self.config.thread_count == 1 {
-    //         self.analyze_single_threaded()
-    //     } else {
-    //         self.analyze_multi_threaded()
-    //     };
-
-    //     pb.finish_with_message("Analysis complete");
-    //     result
-    // }
-
-    fn analyze_single_threaded(&self) -> Result<AnalysisResult, AnalyzerError> {
         let link_handler = Arc::new(LinkHandler::new());
-        let walker = DirectoryWalker::new(link_handler.clone());
-        let collector = ResultCollector::new();
 
-        // Select traversal strategy
-        let strategy: Box<dyn TraversalStrategyTrait> = match self.config.traversal_strategy {
-            TraversalStrategy::DepthFirst => Box::new(DepthFirstTraversal::new()),
-            TraversalStrategy::BreadthFirst => Box::new(BreadthFirstTraversal::new()),
-        };
-
-        // Perform traversal
-        strategy.traverse(
-            &self.config.root_path,
-            &self.config,
-            &walker,
-            &link_handler,
-            &collector,
-        )?;
-
-        Ok(collector.finalize())
-    }
-
-    fn analyze_multi_threaded(&self) -> Result<AnalysisResult, AnalyzerError> {
-        // Build thread pool
-        let pool = ThreadPoolBuilder::new()
-            .num_threads(self.config.thread_count)
-            .build()
-            .map_err(|e| AnalyzerError::ThreadPool(e.to_string()))?;
-
-        // For now, use single-threaded approach within the pool
-        // Full multi-threaded implementation would require more complex coordination
-        let result = pool.install(|| self.analyze_single_threaded())?;
-
-        Ok(result)
+        // Validation already guarantees thread_count >= 1, so we can safely
+        // treat `1` as the single-threaded code path and everything else as
+        // parallel. Parallel traversal is responsible for setting up its own
+        // rayon pool with the requested number of threads.
+        if self.config.thread_count == 1 {
+            traversal::traverse_single(&self.config, &link_handler).map(AnalysisResult::from)
+        } else {
+            traversal::traverse_parallel(&self.config, &link_handler).map(AnalysisResult::from)
+        }
     }
 }

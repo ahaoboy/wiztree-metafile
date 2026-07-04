@@ -20,7 +20,7 @@
 //! ## Example
 //!
 //! ```no_run
-//! use file_analyzer::{AnalyzerConfig, FileAnalyzer, TraversalStrategy};
+//! use wiztree_metafile::{AnalyzerConfig, FileAnalyzer, TraversalStrategy};
 //! use std::path::PathBuf;
 //!
 //! let mut config = AnalyzerConfig::new(PathBuf::from("."));
@@ -28,7 +28,7 @@
 //! config.min_file_size = 1024; // Only files >= 1KB
 //! config.traversal_strategy = TraversalStrategy::DepthFirst;
 //!
-//! let analyzer = FileAnalyzer::new(config);
+//! let mut analyzer = FileAnalyzer::new(config);
 //! match analyzer.analyze() {
 //!     Ok(result) => {
 //!         println!("Total size: {} bytes", result.total_size);
@@ -39,7 +39,6 @@
 //! ```
 
 pub mod analyzer;
-pub mod collector;
 pub mod config;
 pub mod error;
 pub mod link_handler;
