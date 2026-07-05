@@ -90,12 +90,10 @@ impl OutputWriter {
                 const V8_STRING_LIMIT: usize = 0x1fff_ffe8; // ~512 MB
                 if json.len() > V8_STRING_LIMIT {
                     eprintln!(
-                        "Warning: JSON output is {} ({} bytes), exceeds V8's maximum \
-                         string length ({}). Consider using --format binary or a \
+                        "Warning: JSON file is {}, exceeds V8's maximum \
+                         string length. Consider using --format binary or a \
                          non-.json file extension for binary (rkyv) output.",
                         humansize::format_size(json.len(), humansize::DECIMAL),
-                        json.len(),
-                        humansize::format_size(V8_STRING_LIMIT, humansize::DECIMAL),
                     );
                 }
                 match output_path {

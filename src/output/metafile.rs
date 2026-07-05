@@ -182,32 +182,12 @@ impl MetafileFormatter {
         let outputs = HashMap::from([("wiztree".to_string(), output)]);
         (Metafile { inputs, outputs }, total)
     }
-
-    /// JavaScript `String` length ceiling (V8 practical limit). Used to emit
-    /// a diagnostic when a serialized stdout payload exceeds it — programs
-    /// that plan to upload to the esbuild analyzer would otherwise fail
-    /// silently.
-    const MAX_JSON_LENGTH: usize = 0x1fff_ffe8; // ~536MB
-
-    fn warn_if_too_large(json_len: usize) {
-        if json_len > Self::MAX_JSON_LENGTH {
-            eprintln!(
-                "Warning: JSON file is {} MB, exceeds V8's maximum string length ({}).",
-                json_len >> 20,
-                Self::MAX_JSON_LENGTH
-            );
-            eprintln!(
-                "Consider: --format binary, --max-depth, --max-files, --min-size, or --ignore to filter."
-            );
-        }
-    }
 }
 
 impl OutputFormatter for MetafileFormatter {
     fn format(&self, result: &AnalysisResult) -> Result<String, AnalyzerError> {
         let (metafile, _) = Self::build_metafile(result);
         let json = serde_json::to_string(&metafile)?;
-        Self::warn_if_too_large(json.len());
         Ok(json)
     }
 
