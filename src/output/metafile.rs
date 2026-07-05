@@ -143,8 +143,9 @@ impl MetafileFormatter {
         }
     }
 
-    /// Build the `Metafile` value once; reused by both `format` and `write`.
-    fn build_metafile(result: &AnalysisResult) -> (Metafile, u64) {
+    /// Build the `Metafile` value once; reused by the JSON formatter and
+    /// the binary (rkyv) output path.
+    pub(crate) fn build_metafile(result: &AnalysisResult) -> (Metafile, u64) {
         let root = Self::build_tree(result);
 
         let mut inputs: HashMap<String, Input> = HashMap::with_capacity(result.entries.len() + 64);
@@ -191,12 +192,13 @@ impl MetafileFormatter {
     fn warn_if_too_large(json_len: usize) {
         if json_len > Self::MAX_JSON_LENGTH {
             eprintln!(
-                "Warning: JSON output is {} bytes ({} MB), exceeds V8's maximum string length ({}).",
-                json_len,
+                "Warning: JSON file is {} MB, exceeds V8's maximum string length ({}).",
                 json_len >> 20,
                 Self::MAX_JSON_LENGTH
             );
-            eprintln!("Consider: --max-depth, --max-files, --min-size, or --ignore to filter.");
+            eprintln!(
+                "Consider: --format binary, --max-depth, --max-files, --min-size, or --ignore to filter."
+            );
         }
     }
 }

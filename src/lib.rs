@@ -51,4 +51,4 @@ pub mod walker;
 pub use analyzer::{AnalysisResult, FileAnalyzer, FileEntry};
 pub use config::{AnalyzerConfig, TraversalStrategy};
 pub use error::AnalyzerError;
-pub use output::OutputFormat;
+pub use output::Format;

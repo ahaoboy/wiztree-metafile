@@ -18,4 +18,7 @@ pub enum AnalyzerError {
 
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    #[error("Binary serialization error: {0}")]
+    BinarySerialization(String),
 }

@@ -1,6 +1,7 @@
 // Configuration structures for file analysis
 
 use crate::error::AnalyzerError;
+use crate::output::Format;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use std::path::PathBuf;
 
@@ -12,6 +13,7 @@ pub struct AnalyzerConfig {
     pub min_file_size: u64,
     pub thread_count: usize,
     pub output_path: Option<PathBuf>,
+    pub output_format: Option<Format>,
     pub root_path: PathBuf,
     pub ignore_patterns: Option<GlobSet>,
 }
@@ -49,6 +51,7 @@ impl AnalyzerConfig {
             min_file_size: 0,
             thread_count: num_cpus::get(),
             output_path: None,
+            output_format: None,
             root_path,
             ignore_patterns: None,
         }

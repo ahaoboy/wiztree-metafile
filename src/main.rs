@@ -3,7 +3,7 @@
 use clap::Parser;
 use std::path::PathBuf;
 use std::process;
-use wiztree_metafile::{AnalyzerConfig, FileAnalyzer, TraversalStrategy};
+use wiztree_metafile::{AnalyzerConfig, FileAnalyzer, Format, TraversalStrategy};
 
 #[derive(Parser)]
 #[command(name = "wiztree-metafile")]
@@ -38,6 +38,10 @@ struct Cli {
     #[arg(short = 'o', long = "output")]
     output: Option<PathBuf>,
 
+    /// Output format: json, binary (overrides file extension detection)
+    #[arg(short = 'f', long = "format")]
+    format: Option<String>,
+
     /// Ignore patterns (glob format, can be specified multiple times)
     #[arg(short = 'i', long = "ignore")]
     ignore: Vec<String>,
@@ -71,6 +75,17 @@ fn main() {
         process::exit(1);
     }
 
+    // Parse output format (CLI arg takes priority over file extension)
+    if let Some(ref fmt_str) = cli.format {
+        match fmt_str.parse::<Format>() {
+            Ok(fmt) => config.output_format = Some(fmt),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                process::exit(1);
+            }
+        }
+    }
+
     // Set thread count
     if let Some(threads) = cli.threads {
         config.thread_count = threads;
@@ -78,13 +93,16 @@ fn main() {
     }
 
     // Run analysis
+    let output_format = config.output_format;
     let mut analyzer = FileAnalyzer::new(config);
     match analyzer.analyze() {
         Ok(result) => {
             // Write output
-            if let Err(e) =
-                wiztree_metafile::output::OutputWriter::write(&result, cli.output.as_deref())
-            {
+            if let Err(e) = wiztree_metafile::output::OutputWriter::write(
+                &result,
+                cli.output.as_deref(),
+                output_format,
+            ) {
                 eprintln!("Error writing output: {}", e);
                 process::exit(1);
             }
